@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Postroom</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #09090e;
+      --surf:      #111119;
+      --surf2:     #18181f;
+      --surf3:     #1f1f2a;
+      --border:    rgba(255,255,255,0.06);
+      --border2:   rgba(255,255,255,0.1);
+      --accent:    #7c3aed;
+      --accent-bg: rgba(124,58,237,0.12);
+      --accent-bd: rgba(124,58,237,0.3);
+      --text:      #eef0f6;
+      --text2:     #8b92a8;
+      --text3:     #4a5068;
+      --green:     #22c55e;
+      --red:       #f43f5e;
+      --r:         8px;
+    }
+
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; background: var(--bg); color: var(--text); overflow: hidden; font-size: 14px; }
+
+    /* ── Layout ── */
+    .app  { display: flex; flex-direction: column; height: 100vh; }
+    .main { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Header ── */
+    .hdr {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 50px; padding: 0 18px;
+      background: var(--surf); border-bottom: 1px solid var(--border);
+      flex-shrink: 0; gap: 12px; position: relative;
+    }
+    .hdr::after {
+      content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent-bg), transparent);
+    }
+
+    .logo { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; letter-spacing: -0.4px; user-select: none; }
+    .logo-mark { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
+    .logo-mark img { width: 28px; height: 28px; filter: brightness(0) invert(1); object-fit: contain; }
+
+    .hdr-center { display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--text2); }
+    .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 20px; background: var(--accent-bg); border: 1px solid var(--accent-bd); color: #a78bfa; font-size: 11px; font-weight: 600; }
+    .dot-wrap { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: blink 2.5s ease-in-out infinite; }
+    .dot.off { background: var(--red); animation: none; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
+
+    .hdr-actions { display: flex; gap: 6px; }
+
+    .btn { display: inline-flex; align-items: center; gap: 4px; padding: 5px 11px; border-radius: var(--r); font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--text2); transition: background .12s, color .12s, border-color .12s; }
+    .btn:hover { background: var(--surf3); color: var(--text); }
+    .btn.danger:hover { background: rgba(244,63,94,.1); color: var(--red); border-color: rgba(244,63,94,.3); }
+
+    /* ── Sidebar ── */
+    .sidebar { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--surf); border-right: 1px solid var(--border); }
+
+    .search-row { padding: 10px; border-bottom: 1px solid var(--border); }
+    .search-wrap { position: relative; }
+    .search-icon { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--text3); pointer-events: none; display: flex; }
+    .search { width: 100%; padding: 7px 10px 7px 30px; background: var(--bg); border: 1px solid var(--border2); border-radius: var(--r); color: var(--text); font-size: 12px; outline: none; transition: border-color .15s; }
+    .search:focus { border-color: var(--accent); }
+    .search::placeholder { color: var(--text3); }
+
+    .email-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+    .email-list::-webkit-scrollbar { width: 3px; }
+    .email-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+    .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 8px; color: var(--text3); user-select: none; }
+    .empty-icon { font-size: 30px; opacity: .4; }
+    .empty-label { font-size: 13px; }
+    .empty-sub { font-size: 11px; opacity: .6; }
+
+    .item { padding: 11px 14px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; position: relative; }
+    .item:hover { background: var(--surf2); }
+    .item.sel { background: var(--accent-bg); border-left: 2px solid var(--accent); }
+    .item.sel .item-from { color: #c4b5fd; }
+    @keyframes arrive { from { opacity:0; transform:translateY(-6px); } to { opacity:1; transform:translateY(0); } }
+    .item.new { animation: arrive .25s ease-out; }
+
+    .item-row1 { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px; gap: 8px; }
+    .item-from { font-size: 12.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .item-time  { font-size: 10.5px; color: var(--text3); flex-shrink: 0; }
+    .item-subj  { font-size: 11.5px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+    .item-to    { font-size: 10.5px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .item-att   { display: inline-block; font-size: 9px; color: var(--text3); margin-left: 4px; vertical-align: middle; }
+
+    /* ── Preview ── */
+    .preview { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+
+    .no-sel { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text3); gap: 10px; user-select: none; }
+    .no-sel-icon { font-size: 44px; opacity: .2; }
+    .no-sel-text { font-size: 13px; }
+
+    .eview { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+
+    .ehdr { padding: 18px 22px 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+    .esubj { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 12px; line-height: 1.3; word-break: break-word; }
+
+    .emeta { display: flex; flex-direction: column; gap: 4px; }
+    .erow  { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+    .elabel { color: var(--text3); width: 34px; flex-shrink: 0; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; padding-top: 1px; }
+    .evalue { color: var(--text2); word-break: break-all; }
+    .evalue.main { color: var(--text); font-weight: 500; }
+
+    /* ── Attachments bar ── */
+    .atts {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 9px 22px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+      background: var(--surf);
+    }
+    .att-label { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--text3); flex-shrink: 0; margin-right: 2px; }
+    .att-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 10px; border-radius: var(--r);
+      background: var(--surf2); border: 1px solid var(--border2);
+      color: var(--text2); font-size: 11.5px; text-decoration: none;
+      transition: all .12s; cursor: pointer; max-width: 220px;
+    }
+    .att-chip:hover { background: var(--surf3); color: var(--text); border-color: var(--border2); }
+    .att-chip-icon { font-size: 13px; flex-shrink: 0; line-height: 1; }
+    .att-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+    .att-chip-size { font-size: 10px; color: var(--text3); flex-shrink: 0; }
+    .att-thumb { width: 22px; height: 22px; object-fit: cover; border-radius: 4px; flex-shrink: 0; background: var(--surf3); }
+
+    /* ── Toolbar ── */
+    .etbar { display: flex; align-items: center; justify-content: space-between; padding: 7px 22px; border-bottom: 1px solid var(--border); flex-shrink: 0; gap: 8px; }
+    .etbar-left { display: flex; align-items: center; gap: 6px; }
+    .toggle { display: flex; background: var(--surf); border: 1px solid var(--border); border-radius: var(--r); padding: 2px; }
+    .tbtn { padding: 3px 9px; border-radius: 6px; font-size: 11px; font-weight: 500; cursor: pointer; color: var(--text3); border: none; background: none; transition: all .12s; }
+    .tbtn.on { background: var(--surf3); color: var(--text); }
+
+    /* ── Body ── */
+    .ebody { flex: 1; overflow: hidden; position: relative; min-height: 0; }
+    .btext { padding: 18px 22px; font-size: 12.5px; line-height: 1.75; color: var(--text2); overflow-y: auto; height: 100%; white-space: pre-wrap; word-break: break-word; font-family: "SF Mono","Fira Code","Cascadia Code",monospace; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+    .bhtml { height: 100%; }
+    .bhtml iframe { width: 100%; height: 100%; border: none; }
+
+    /* ── Lightbox ── */
+    .lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex; align-items: center; justify-content: center; z-index: 200; cursor: zoom-out; backdrop-filter: blur(4px); }
+    .lightbox img { max-width: 90vw; max-height: 90vh; border-radius: var(--r); box-shadow: 0 8px 40px rgba(0,0,0,.6); object-fit: contain; }
+    .lightbox-close { position: fixed; top: 18px; right: 22px; color: rgba(255,255,255,.7); font-size: 22px; cursor: pointer; background: none; border: none; line-height: 1; }
+
+    /* ── Toasts ── */
+    .toasts { position: fixed; bottom: 18px; right: 18px; display: flex; flex-direction: column; gap: 7px; z-index: 100; pointer-events: none; }
+    .toast { background: var(--surf2); border: 1px solid var(--border2); border-left: 3px solid var(--accent); border-radius: var(--r); padding: 9px 13px; font-size: 12px; max-width: 260px; pointer-events: all; cursor: pointer; animation: tin .2s ease-out; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+    .toast-from { font-weight: 600; margin-bottom: 2px; color: var(--text); }
+    .toast-subj { color: var(--text2); }
+    @keyframes tin  { from { opacity:0; transform:translateX(14px); } to { opacity:1; transform:translateX(0); } }
+    @keyframes tout { from { opacity:1; transform:translateX(0); }    to { opacity:0; transform:translateX(14px); } }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <header class="hdr">
+    <div class="logo">
+      <div class="logo-mark"><img src="/logo.png" alt="postroom"></div>
+      postroom
+    </div>
+    <div class="hdr-center">
+      <span>Inbox <span class="pill" id="count">0</span></span>
+      <span class="dot-wrap">
+        <span class="dot off" id="dot"></span>
+        <span id="ws-lbl">connecting</span>
+      </span>
+    </div>
+    <div class="hdr-actions">
+      <button class="btn danger" onclick="clearAll()">Clear all</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="sidebar">
+      <div class="search-row">
+        <div class="search-wrap">
+          <span class="search-icon">
+            <svg width="13" height="13" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/>
+            </svg>
+          </span>
+          <input class="search" id="search" type="search" placeholder="Search…" oninput="render()">
+        </div>
+      </div>
+      <div class="email-list" id="list"></div>
+    </aside>
+
+    <div class="preview" id="preview">
+      <div class="no-sel">
+        <div class="no-sel-icon">✉</div>
+        <div class="no-sel-text">Select an email to read</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" style="display:none" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<script>
+"use strict";
+let emails = [];
+let sel = null;
+let view = 'html';
+
+/* ── utils ── */
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+function displayFrom(raw) {
+  const m = raw.match(/^"?([^"<]+)"?\s*<[^>]+>/);
+  return m ? m[1].trim() : (raw.replace(/<[^>]+>/, '').trim() || raw);
+}
+
+function timeAgo(ts) {
+  const d = new Date(ts), diff = Date.now() - d;
+  if (diff < 60e3)    return 'just now';
+  if (diff < 3600e3)  return Math.floor(diff/60e3) + 'm ago';
+  if (diff < 86400e3) return Math.floor(diff/3600e3) + 'h ago';
+  return d.toLocaleDateString(undefined, {month:'short', day:'numeric'});
+}
+
+function fmtSize(n) {
+  if (n < 1024)       return n + ' B';
+  if (n < 1024*1024)  return (n/1024).toFixed(1) + ' KB';
+  return (n/1024/1024).toFixed(1) + ' MB';
+}
+
+function fileIcon(ct) {
+  if (!ct) return '📎';
+  if (ct.startsWith('image/'))           return '🖼';
+  if (ct === 'application/pdf')          return '📄';
+  if (ct.includes('zip') || ct.includes('gzip') || ct.includes('tar') || ct.includes('rar')) return '📦';
+  if (ct.includes('word') || ct.includes('document')) return '📝';
+  if (ct.includes('excel') || ct.includes('sheet') || ct.includes('csv')) return '📊';
+  if (ct.includes('presentation') || ct.includes('powerpoint')) return '📊';
+  if (ct.startsWith('video/'))           return '🎬';
+  if (ct.startsWith('audio/'))           return '🎵';
+  if (ct.startsWith('text/'))            return '📃';
+  if (ct.includes('json') || ct.includes('xml')) return '📋';
+  return '📎';
+}
+
+/* ── render list ── */
+function render() {
+  const q = document.getElementById('search').value.toLowerCase();
+  const el = document.getElementById('list');
+  document.getElementById('count').textContent = emails.length;
+
+  const filtered = q ? emails.filter(e =>
+    e.subject.toLowerCase().includes(q) ||
+    e.from.toLowerCase().includes(q) ||
+    (e.to||[]).join(' ').toLowerCase().includes(q) ||
+    (e.text||'').toLowerCase().includes(q)
+  ) : emails;
+
+  if (!filtered.length) {
+    el.innerHTML = `<div class="empty">
+      <div class="empty-icon">📭</div>
+      <div class="empty-label">${q ? 'No matches' : 'No emails yet'}</div>
+      <div class="empty-sub">${q ? 'Try a different search' : 'SMTP on port 1025'}</div>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(e => {
+    const hasAtt = e.attachments && e.attachments.some(a => !a.inline);
+    return `<div class="item${sel && sel.id===e.id?' sel':''}" data-id="${e.id}" onclick="pick('${e.id}')">
+      <div class="item-row1">
+        <span class="item-from">${esc(displayFrom(e.from))}${hasAtt ? '<span class="item-att">📎</span>' : ''}</span>
+        <span class="item-time">${timeAgo(e.timestamp)}</span>
+      </div>
+      <div class="item-subj">${esc(e.subject)}</div>
+      <div class="item-to">→ ${esc((e.to||[]).join(', '))}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ── pick & preview ── */
+function pick(id) {
+  sel = emails.find(e => e.id === id) || null;
+  render();
+  if (sel) renderPreview(sel);
+}
+
+function renderPreview(e) {
+  const pane = document.getElementById('preview');
+  const hasHTML = !!(e.html && e.html.trim());
+  const hasText = !!(e.text && e.text.trim());
+  const visibleAtts = (e.attachments || []).filter(a => !a.inline);
+
+  // Attachment chips HTML
+  const attsHtml = visibleAtts.length ? `
+    <div class="atts">
+      <span class="att-label">Attachments</span>
+      ${visibleAtts.map(a => {
+        const url = `/api/emails/${e.id}/attachments/${a.id}`;
+        const isImg = a.content_type && a.content_type.startsWith('image/');
+        return `<a class="att-chip" href="${url}" target="_blank" title="${esc(a.filename)}">
+          ${isImg
+            ? `<img class="att-thumb" src="${url}" alt="${esc(a.filename)}" onerror="this.style.display='none'">`
+            : `<span class="att-chip-icon">${fileIcon(a.content_type)}</span>`}
+          <span class="att-chip-name">${esc(a.filename)}</span>
+          <span class="att-chip-size">${fmtSize(a.size)}</span>
+        </a>`;
+      }).join('')}
+    </div>` : '';
+
+  // View toggle (only when both parts exist)
+  const toggleHtml = (hasHTML && hasText) ? `
+    <div class="toggle">
+      <button class="tbtn${view==='html'?' on':''}" onclick="setView('html')">HTML</button>
+      <button class="tbtn${view==='text'?' on':''}" onclick="setView('text')">Text</button>
+    </div>` : '';
+
+  pane.innerHTML = `
+    <div class="eview">
+      <div class="ehdr">
+        <div class="esubj">${esc(e.subject)}</div>
+        <div class="emeta">
+          <div class="erow"><span class="elabel">From</span><span class="evalue main">${esc(e.from)}</span></div>
+          <div class="erow"><span class="elabel">To</span><span class="evalue">${esc((e.to||[]).join(', '))}</span></div>
+          <div class="erow"><span class="elabel">At</span><span class="evalue">${new Date(e.timestamp).toLocaleString()}</span></div>
+          <div class="erow"><span class="elabel">Size</span><span class="evalue">${fmtSize(e.size)}</span></div>
+        </div>
+      </div>
+      ${attsHtml}
+      <div class="etbar">
+        <div class="etbar-left">${toggleHtml}</div>
+        <button class="btn danger" onclick="del('${e.id}')">Delete</button>
+      </div>
+      <div class="ebody" id="ebody"></div>
+    </div>`;
+
+  fillBody(e, hasHTML, hasText);
+}
+
+function fillBody(e, hasHTML, hasText) {
+  const body = document.getElementById('ebody');
+  if (!body) return;
+  body.innerHTML = '';
+
+  if (hasHTML && (view === 'html' || !hasText)) {
+    const wrap = document.createElement('div');
+    wrap.className = 'bhtml';
+    const iframe = document.createElement('iframe');
+    iframe.sandbox = 'allow-same-origin allow-popups';
+    iframe.srcdoc = e.html;
+    wrap.appendChild(iframe);
+    body.appendChild(wrap);
+  } else {
+    const div = document.createElement('div');
+    div.className = 'btext';
+    div.textContent = e.text || e.html || '(empty)';
+    body.appendChild(div);
+  }
+}
+
+function setView(v) {
+  view = v;
+  if (sel) renderPreview(sel);
+}
+
+/* ── lightbox ── */
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').style.display = 'flex';
+}
+function closeLightbox() {
+  document.getElementById('lightbox').style.display = 'none';
+  document.getElementById('lightbox-img').src = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+/* ── delete / clear ── */
+async function del(id) {
+  await fetch('/api/emails/'+id, {method:'DELETE'});
+  emails = emails.filter(e => e.id !== id);
+  if (sel && sel.id === id) { sel = null; resetPreview(); }
+  render();
+}
+
+async function clearAll() {
+  if (!confirm('Delete all emails?')) return;
+  await fetch('/api/emails', {method:'DELETE'});
+  emails = []; sel = null; resetPreview(); render();
+}
+
+function resetPreview() {
+  document.getElementById('preview').innerHTML = `
+    <div class="no-sel"><div class="no-sel-icon">✉</div><div class="no-sel-text">Select an email to read</div></div>`;
+}
+
+/* ── toast ── */
+function toast(e) {
+  const box = document.getElementById('toasts');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.innerHTML = `<div class="toast-from">${esc(displayFrom(e.from))}</div><div class="toast-subj">${esc(e.subject)}</div>`;
+  t.onclick = () => pick(e.id);
+  box.appendChild(t);
+  setTimeout(() => {
+    t.style.animation = 'tout .2s ease-out forwards';
+    setTimeout(() => t.remove(), 200);
+  }, 3500);
+}
+
+/* ── keyboard nav ── */
+document.addEventListener('keydown', ev => {
+  if (ev.target.tagName === 'INPUT') return;
+  const idx = sel ? emails.findIndex(e => e.id === sel.id) : -1;
+  if (ev.key === 'j' || ev.key === 'ArrowDown') { ev.preventDefault(); if (idx < emails.length-1) pick(emails[idx+1].id); }
+  else if (ev.key === 'k' || ev.key === 'ArrowUp') { ev.preventDefault(); if (idx > 0) pick(emails[idx-1].id); }
+  else if ((ev.key === 'Delete' || ev.key === 'Backspace') && sel) del(sel.id);
+});
+
+/* ── websocket ── */
+function connect() {
+  const dot = document.getElementById('dot');
+  const lbl = document.getElementById('ws-lbl');
+  const ws  = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onopen  = () => { dot.classList.remove('off'); lbl.textContent = 'live'; };
+  ws.onclose = () => { dot.classList.add('off'); lbl.textContent = 'reconnecting'; setTimeout(connect, 2000); };
+  ws.onerror = () => ws.close();
+
+  ws.onmessage = ev => {
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'new_email' && msg.email) {
+      emails.unshift(msg.email);
+      render();
+      const el = document.querySelector(`[data-id="${msg.email.id}"]`);
+      if (el) el.classList.add('new');
+      toast(msg.email);
+    } else if (msg.type === 'deleted' && msg.email) {
+      emails = emails.filter(e => e.id !== msg.email.id);
+      if (sel && sel.id === msg.email.id) { sel = null; resetPreview(); }
+      render();
+    } else if (msg.type === 'cleared') {
+      emails = []; sel = null; resetPreview(); render();
+    }
+  };
+}
+
+/* ── boot ── */
+fetch('/api/emails').then(r => r.json()).then(d => { emails = d || []; render(); });
+connect();
+</script>
+</body>
+</html>

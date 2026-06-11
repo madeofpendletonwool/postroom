@@ -1,0 +1,11 @@
+services:
+  postroom:
+    build: .
+    container_name: postroom
+    ports:
+      - "8089:8080"   # Web UI
+      - "1025:1025"   # SMTP
+    environment:
+      - POSTROOM_USER=admin
+      - POSTROOM_PASS=postroom
+    restart: unless-stopped
