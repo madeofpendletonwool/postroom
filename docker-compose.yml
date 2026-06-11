@@ -8,4 +8,9 @@ services:
     environment:
       - POSTROOM_USER=admin
       - POSTROOM_PASS=postroom
+    volumes:
+      - postroom_data:/data
     restart: unless-stopped
+
+volumes:
+  postroom_data:

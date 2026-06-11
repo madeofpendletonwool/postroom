@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	_ "embed"
 	"encoding/base64"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"net/mail"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -25,6 +27,9 @@ import (
 
 //go:embed web/index.html
 var indexHTML []byte
+
+//go:embed web/login.html
+var loginHTML []byte
 
 //go:embed logo.png
 var logoBytes []byte
@@ -56,12 +61,13 @@ type Email struct {
 // ── Store ─────────────────────────────────────────────────────────────────────
 
 type Store struct {
-	mu     sync.RWMutex
-	emails []*Email
-	max    int
+	mu      sync.RWMutex
+	emails  []*Email
+	max     int
+	dataDir string
 }
 
-func NewStore() *Store { return &Store{max: 500} }
+func NewStore(dataDir string) *Store { return &Store{max: 500, dataDir: dataDir} }
 
 func (s *Store) Add(e *Email) {
 	s.mu.Lock()
@@ -69,7 +75,9 @@ func (s *Store) Add(e *Email) {
 	if len(s.emails) > s.max {
 		s.emails = s.emails[:s.max]
 	}
+	snap := append([]*Email{}, s.emails...)
 	s.mu.Unlock()
+	go s.save(snap)
 }
 
 func (s *Store) All() []*Email {
@@ -93,13 +101,17 @@ func (s *Store) Get(id string) *Email {
 
 func (s *Store) Delete(id string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	for i, e := range s.emails {
 		if e.ID == id {
 			s.emails = append(s.emails[:i], s.emails[i+1:]...)
+			snap := append([]*Email{}, s.emails...)
+			s.mu.Unlock()
+			go s.save(snap)
+			go os.RemoveAll(filepath.Join(s.dataDir, "att", id))
 			return true
 		}
 	}
+	s.mu.Unlock()
 	return false
 }
 
@@ -107,6 +119,65 @@ func (s *Store) Clear() {
 	s.mu.Lock()
 	s.emails = nil
 	s.mu.Unlock()
+	go s.save(nil)
+	go os.RemoveAll(filepath.Join(s.dataDir, "att"))
+}
+
+// save writes a full snapshot of emails to disk. Called in a goroutine after every mutation.
+func (s *Store) save(emails []*Email) {
+	if s.dataDir == "" {
+		return
+	}
+	if err := os.MkdirAll(s.dataDir, 0755); err != nil {
+		log.Printf("persist: mkdir: %v", err)
+		return
+	}
+	data, _ := json.Marshal(emails)
+	tmp := filepath.Join(s.dataDir, "emails.json.tmp")
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		log.Printf("persist: write: %v", err)
+		return
+	}
+	if err := os.Rename(tmp, filepath.Join(s.dataDir, "emails.json")); err != nil {
+		log.Printf("persist: rename: %v", err)
+		return
+	}
+	for _, e := range emails {
+		for _, a := range e.Attachments {
+			if len(a.Data) == 0 {
+				continue
+			}
+			dir := filepath.Join(s.dataDir, "att", e.ID)
+			os.MkdirAll(dir, 0755)
+			os.WriteFile(filepath.Join(dir, a.ID), a.Data, 0644)
+		}
+	}
+}
+
+// load reads persisted emails from disk on startup.
+func (s *Store) load() {
+	if s.dataDir == "" {
+		return
+	}
+	data, err := os.ReadFile(filepath.Join(s.dataDir, "emails.json"))
+	if err != nil {
+		return
+	}
+	var emails []*Email
+	if err := json.Unmarshal(data, &emails); err != nil {
+		log.Printf("persist: load: %v", err)
+		return
+	}
+	for _, e := range emails {
+		for _, a := range e.Attachments {
+			a.Data, _ = os.ReadFile(filepath.Join(s.dataDir, "att", e.ID, a.ID))
+		}
+		if e.Attachments == nil {
+			e.Attachments = []*Attachment{}
+		}
+	}
+	s.emails = emails
+	log.Printf("loaded %d emails from %s", len(emails), s.dataDir)
 }
 
 // ── WebSocket hub ─────────────────────────────────────────────────────────────
@@ -370,12 +441,60 @@ func typeExt(mimeType string) string {
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
-func basicAuth(user, pass string, next http.Handler) http.Handler {
+const sessionCookie = "postroom_session"
+
+type sessions struct {
+	mu    sync.Mutex
+	valid map[string]struct{}
+}
+
+func newSessions() *sessions { return &sessions{valid: make(map[string]struct{})} }
+
+func (s *sessions) create() string {
+	b := make([]byte, 24)
+	rand.Read(b)
+	tok := base64.RawURLEncoding.EncodeToString(b)
+	s.mu.Lock()
+	s.valid[tok] = struct{}{}
+	s.mu.Unlock()
+	return tok
+}
+
+func (s *sessions) check(r *http.Request) bool {
+	c, err := r.Cookie(sessionCookie)
+	if err != nil {
+		return false
+	}
+	s.mu.Lock()
+	_, ok := s.valid[c.Value]
+	s.mu.Unlock()
+	return ok
+}
+
+func (s *sessions) delete(r *http.Request) {
+	c, err := r.Cookie(sessionCookie)
+	if err != nil {
+		return
+	}
+	s.mu.Lock()
+	delete(s.valid, c.Value)
+	s.mu.Unlock()
+}
+
+func authMiddleware(user, pass string, sess *sessions, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		u, p, ok := r.BasicAuth()
-		if !ok || u != user || p != pass {
-			w.Header().Set("WWW-Authenticate", `Basic realm="postroom"`)
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+		// Always allow logo and login endpoints through
+		if r.URL.Path == "/logo.png" || strings.HasPrefix(r.URL.Path, "/auth/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !sess.check(r) {
+			// WebSocket: can't redirect, just close
+			if r.Header.Get("Upgrade") == "websocket" {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -387,10 +506,59 @@ func basicAuth(user, pass string, next http.Handler) http.Handler {
 var upgrader = websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
 
 func main() {
-	store := NewStore()
+	dataDir := os.Getenv("POSTROOM_DATA")
+	if dataDir == "" {
+		dataDir = "/data"
+	}
+	store := NewStore(dataDir)
+	store.load()
 	hub := NewHub()
+	sess := newSessions()
+
+	authUser := os.Getenv("POSTROOM_USER")
+	authPass := os.Getenv("POSTROOM_PASS")
 
 	mux := http.NewServeMux()
+
+	// Auth routes (always public)
+	mux.HandleFunc("/auth/login", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.Write(loginHTML)
+			return
+		}
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var creds struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if creds.Username != authUser || creds.Password != authPass {
+			http.Error(w, "invalid credentials", http.StatusUnauthorized)
+			return
+		}
+		tok := sess.create()
+		http.SetCookie(w, &http.Cookie{
+			Name:     sessionCookie,
+			Value:    tok,
+			Path:     "/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+		w.WriteHeader(http.StatusOK)
+	})
+
+	mux.HandleFunc("/auth/logout", func(w http.ResponseWriter, r *http.Request) {
+		sess.delete(r)
+		http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: "", Path: "/", MaxAge: -1})
+		http.Redirect(w, r, "/auth/login", http.StatusSeeOther)
+	})
 
 	mux.HandleFunc("/logo.png", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
@@ -510,9 +678,9 @@ func main() {
 	}()
 
 	var handler http.Handler = mux
-	if user, pass := os.Getenv("POSTROOM_USER"), os.Getenv("POSTROOM_PASS"); user != "" && pass != "" {
-		handler = basicAuth(user, pass, mux)
-		log.Printf("auth  enabled user=%s", user)
+	if authUser != "" && authPass != "" {
+		handler = authMiddleware(authUser, authPass, sess, mux)
+		log.Printf("auth  enabled user=%s", authUser)
 	}
 
 	log.Println("HTTP  :8080  →  http://localhost:8080")

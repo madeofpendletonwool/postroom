@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Postroom · Sign in</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #09090e;
+      --surf:    #111119;
+      --surf2:   #18181f;
+      --border:  rgba(255,255,255,0.08);
+      --border2: rgba(255,255,255,0.12);
+      --accent:  #7c3aed;
+      --text:    #eef0f6;
+      --text2:   #8b92a8;
+      --text3:   #4a5068;
+      --red:     #f43f5e;
+      --r:       10px;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* subtle grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(124,58,237,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,58,237,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* glow behind card */
+    body::after {
+      content: '';
+      position: fixed;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 500px;
+      height: 300px;
+      background: radial-gradient(ellipse, rgba(124,58,237,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      width: 360px;
+      background: var(--surf);
+      border: 1px solid var(--border2);
+      border-radius: 16px;
+      padding: 36px 32px 32px;
+      box-shadow: 0 8px 48px rgba(0,0,0,.5), 0 0 0 1px rgba(124,58,237,0.08);
+    }
+
+    .brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+    }
+
+    .brand-mark {
+      width: 52px;
+      height: 52px;
+      background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(79,70,229,0.1));
+      border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-mark img {
+      width: 30px;
+      height: 30px;
+      filter: brightness(0) invert(1);
+      opacity: 0.9;
+    }
+
+    .brand-name {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+      color: var(--text);
+    }
+
+    .brand-sub {
+      font-size: 12px;
+      color: var(--text3);
+      margin-top: -6px;
+    }
+
+    .field {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--text2);
+      margin-bottom: 6px;
+      letter-spacing: 0.02em;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px 13px;
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: var(--r);
+      color: var(--text);
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
+      font-family: inherit;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(124,58,237,0.15);
+    }
+
+    input::placeholder { color: var(--text3); }
+
+    .submit {
+      width: 100%;
+      margin-top: 8px;
+      padding: 11px;
+      background: var(--accent);
+      border: none;
+      border-radius: var(--r);
+      color: #fff;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity .15s, transform .1s;
+      letter-spacing: 0.01em;
+    }
+
+    .submit:hover  { opacity: .9; }
+    .submit:active { transform: scale(.98); }
+
+    .error {
+      display: none;
+      margin-top: 12px;
+      padding: 9px 12px;
+      background: rgba(244,63,94,0.1);
+      border: 1px solid rgba(244,63,94,0.25);
+      border-radius: var(--r);
+      font-size: 12px;
+      color: var(--red);
+      text-align: center;
+    }
+    .error.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <div class="brand-mark">
+        <img src="/logo.png" alt="postroom">
+      </div>
+      <div class="brand-name">postroom</div>
+      <div class="brand-sub">Sign in to continue</div>
+    </div>
+
+    <form id="form" onsubmit="login(event)">
+      <div class="field">
+        <label for="u">Username</label>
+        <input id="u" type="text" placeholder="admin" autocomplete="username" autofocus>
+      </div>
+      <div class="field">
+        <label for="p">Password</label>
+        <input id="p" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="submit" type="submit">Sign in</button>
+      <div class="error" id="err">Invalid username or password</div>
+    </form>
+  </div>
+
+  <script>
+    async function login(e) {
+      e.preventDefault();
+      const u = document.getElementById('u').value;
+      const p = document.getElementById('p').value;
+      const err = document.getElementById('err');
+      err.classList.remove('show');
+
+      const res = await fetch('/auth/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({username: u, password: p})
+      });
+
+      if (res.ok) {
+        location.href = '/';
+      } else {
+        err.classList.add('show');
+        document.getElementById('p').value = '';
+        document.getElementById('p').focus();
+      }
+    }
+  </script>
+</body>
+</html>
